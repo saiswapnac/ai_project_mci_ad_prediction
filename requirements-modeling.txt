@@ -3,3 +3,4 @@ numpy
 scikit-learn
 nibabel
 torch
+matplotlib

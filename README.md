@@ -24,6 +24,16 @@ Install the Python packages once:
 py -3.14 -m pip install -r .\requirements-modeling.txt
 ```
 
+### Demonstrate the workflow before MRI arrives
+
+Run the synthetic-data demo:
+
+```powershell
+py -3.14 .\scripts\demo_synthetic.py
+```
+
+It trains the fusion network on generated toy volumes and clinical values, then saves a figure with a loss curve, confusion matrix, and toy Grad-CAM overlay under `reports/`. The metrics, figure, and model weights are explicitly marked synthetic. They demonstrate code flow only and must not be described as ADNI results.
+
 After downloading and reviewing baseline T1 scans in IDA:
 
 1. Run `py -3.14 .\scripts\match_mri_metadata.py` to match the metadata locally.
