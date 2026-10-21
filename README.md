@@ -44,3 +44,8 @@ After downloading and reviewing baseline T1 scans in IDA:
 The training script requires at least 20 eligible participants as a technical guard, but that is not an adequate sample-size guarantee. It canonicalizes orientation, normalizes intensity, and resizes volumes; skull stripping, registration, ROI extraction, cross-validation, Grad-CAM, and SHAP are not implemented yet. Do not treat prototype metrics as validated performance.
 
 Keep ADNI participant-level data and MRI files on approved local storage. Review the cohort labels and MRI selections before modeling; this project is for research, not clinical diagnosis.
+
+to get the sythetic data, run
+py -3.14 .\scripts\demo_synthetic.py
+
+
