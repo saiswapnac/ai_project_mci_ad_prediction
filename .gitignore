@@ -1,0 +1,12 @@
+# ADNI participant-level data and derived participant-level tables stay local.
+/data/raw/
+/data/metadata/*.csv
+/data/processed/
+
+# Trained weights can encode information from participant-level training data.
+/models/*.pt
+
+# Keep only explicitly synthetic demo outputs trackable by default.
+/reports/*
+!/reports/SYNTHETIC_demo_figure.png
+!/reports/SYNTHETIC_demo_metrics.json

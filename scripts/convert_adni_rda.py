@@ -10,11 +10,13 @@ from pathlib import Path
 import sys
 
 TARGETS = {"dxsum", "ptdemog", "mmse", "adas"}
+TARGETS.add("roster")
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("input_dir", type=Path, help="Folder containing the extracted .rda files")
     parser.add_argument("--output", type=Path, default=None, help="CSV output folder (default: <input_dir>/converted_csv)")
+    parser.add_argument("--overwrite", action="store_true", help="Replace existing CSV outputs; by default existing files are skipped")
     args = parser.parse_args()
     if not args.input_dir.is_dir():
         parser.error(f"Input folder does not exist: {args.input_dir}")
@@ -47,6 +49,9 @@ def main() -> int:
                 continue
             suffix = "" if len(objects) == 1 else f"_{obj_name}"
             dest = output_dir / f"{path.stem}{suffix}.csv"
+            if dest.exists() and not args.overwrite:
+                print(f"  CSV already exists: {dest}; skipped (use --overwrite to replace)")
+                continue
             frame.to_csv(dest, index=False)
             print(f"  Object: {obj_name!r}; shape: {frame.shape}")
             print("  Columns:", ", ".join(map(str, frame.columns)))

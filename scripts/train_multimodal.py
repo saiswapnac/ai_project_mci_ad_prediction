@@ -12,6 +12,7 @@ prototype, not a reliable clinical or fairness assessment, especially with a
 small MRI sample. Participant-level outputs stay local.
 """
 from __future__ import annotations
+import argparse
 import json
 import random
 from pathlib import Path
@@ -90,12 +91,20 @@ def metrics(y_true: np.ndarray, probability: np.ndarray) -> dict:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--manifest", type=Path, default=MANIFEST, help="Local MRI training manifest")
+    parser.add_argument("--model-output", type=Path, default=MODEL_DIR / "multimodal_prototype.pt")
+    parser.add_argument("--report-output", type=Path, default=REPORT_DIR / "multimodal_prototype_metrics.json")
+    args = parser.parse_args()
+    manifest_path = args.manifest if args.manifest.is_absolute() else ROOT / args.manifest
+    checkpoint = args.model_output if args.model_output.is_absolute() else ROOT / args.model_output
+    report_path = args.report_output if args.report_output.is_absolute() else ROOT / args.report_output
     random.seed(SEED)
     np.random.seed(SEED)
     torch.manual_seed(SEED)
-    if not MANIFEST.exists():
+    if not manifest_path.exists():
         raise FileNotFoundError("Run scripts/make_mri_manifest.py and fill in its local scan fields first.")
-    df = pd.read_csv(MANIFEST, low_memory=False)
+    df = pd.read_csv(manifest_path, low_memory=False)
     df.columns = df.columns.str.strip().str.lower()
     required = {"ptid", "label", "sex", "nifti_path", "t1_confirmed", *CLINICAL[:-1]}
     missing = sorted(required - set(df.columns))
@@ -166,12 +175,12 @@ def main() -> None:
 
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    checkpoint = MODEL_DIR / "multimodal_prototype.pt"
+    checkpoint.parent.mkdir(parents=True, exist_ok=True)
     torch.save({"model_state": model.state_dict(), "clinical_features": CLINICAL,
                 "clinical_medians": medians.to_dict(), "clinical_means": means.to_dict(),
                 "clinical_stds": stds.to_dict(), "volume_shape": VOLUME_SHAPE,
                 "seed": SEED, "threshold": 0.5}, checkpoint)
-    report_path = REPORT_DIR / "multimodal_prototype_metrics.json"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(results, indent=2), encoding="utf-8")
     print("\nExploratory holdout metrics (small-sample estimates; no confidence intervals):")
     print(json.dumps(results, indent=2))
