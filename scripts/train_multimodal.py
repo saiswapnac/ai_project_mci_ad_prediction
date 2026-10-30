@@ -95,10 +95,14 @@ def main() -> None:
     parser.add_argument("--manifest", type=Path, default=MANIFEST, help="Local MRI training manifest")
     parser.add_argument("--model-output", type=Path, default=MODEL_DIR / "multimodal_prototype.pt")
     parser.add_argument("--report-output", type=Path, default=REPORT_DIR / "multimodal_prototype_metrics.json")
+    parser.add_argument("--predictions-output", type=Path, default=REPORT_DIR / "test_predictions.csv")
+    parser.add_argument("--history-output", type=Path, default=REPORT_DIR / "training_history.csv")
     args = parser.parse_args()
     manifest_path = args.manifest if args.manifest.is_absolute() else ROOT / args.manifest
     checkpoint = args.model_output if args.model_output.is_absolute() else ROOT / args.model_output
     report_path = args.report_output if args.report_output.is_absolute() else ROOT / args.report_output
+    predictions_path = args.predictions_output if args.predictions_output.is_absolute() else ROOT / args.predictions_output
+    history_path = args.history_output if args.history_output.is_absolute() else ROOT / args.history_output
     random.seed(SEED)
     np.random.seed(SEED)
     torch.manual_seed(SEED)
@@ -150,6 +154,7 @@ def main() -> None:
     loss_fn = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([neg / pos], device=device))
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-3)
 
+    training_history = []
     model.train()
     for epoch in range(1, 31):
         losses = []
@@ -160,6 +165,7 @@ def main() -> None:
             loss.backward()
             optimizer.step()
             losses.append(float(loss.detach().cpu()))
+        training_history.append({"epoch": epoch, "train_loss": float(np.mean(losses))})
         if epoch in {1, 5, 10, 20, 30}:
             print(f"Epoch {epoch:02d}/30 - train loss: {np.mean(losses):.4f}")
 
@@ -182,10 +188,24 @@ def main() -> None:
                 "seed": SEED, "threshold": 0.5}, checkpoint)
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(results, indent=2), encoding="utf-8")
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(training_history).to_csv(history_path, index=False)
+    predictions_path.parent.mkdir(parents=True, exist_ok=True)
+    # Save only the held-out labels, scores, and sex needed for aggregate figures.
+    # PTID and other direct identifiers are intentionally omitted.
+    prediction_output = pd.DataFrame({
+        "actual_label": y_test.astype(int),
+        "predicted_probability": probability.astype(float),
+        "predicted_label": (probability >= 0.5).astype(int),
+        "sex": df.iloc[test_idx]["sex"].to_numpy(),
+    })
+    prediction_output.to_csv(predictions_path, index=False)
     print("\nExploratory holdout metrics (small-sample estimates; no confidence intervals):")
     print(json.dumps(results, indent=2))
     print(f"\nSaved model locally: {checkpoint}")
     print(f"Saved aggregate metrics locally: {report_path}")
+    print(f"Saved held-out predictions without participant IDs: {predictions_path}")
+    print(f"Saved training loss history: {history_path}")
     print("This prototype resizes and normalizes scans but does not perform skull stripping, registration, or ROI extraction.")
 
 

@@ -55,10 +55,32 @@ It trains the fusion network on generated toy volumes and clinical values, then 
 
 After downloading and reviewing baseline T1 scans in IDA:
 
-1. Run `py -3.14 .\scripts\match_mri_metadata.py` to match the metadata locally.
-2. Run `py -3.14 .\scripts\make_mri_manifest.py`; fill `NIFTI_PATH` and set `T1_CONFIRMED` to `yes` only for reviewed T1 scans.
-3. Convert one reviewed DICOM series at a time with `scripts\convert_dicom_series.py`, or use an already available NIfTI scan.
-4. Run `py -3.14 .\scripts\train_multimodal.py` to train the exploratory 3D CNN + clinical MLP prototype.
+1. Convert the downloaded IDA XML metadata into a new local CSV. This leaves the earlier metadata export untouched:
+
+   ```powershell
+   py -3.14 .\scripts\convert_ida_xml_metadata.py
+   ```
+
+2. Match that metadata to the clinical cohort and create a separate review sheet:
+
+   ```powershell
+   py -3.14 .\scripts\match_mri_metadata.py --mri .\data\raw\MRI_metadata_from_xml.csv --output .\data\metadata\mri_scan_candidates_from_xml.csv
+   py -3.14 .\scripts\make_mri_manifest.py --candidates .\data\metadata\mri_scan_candidates_from_xml.csv --output .\data\metadata\mri_training_manifest_from_xml.csv
+   ```
+
+3. Extract the DICOM ZIP archives into separate folders under `data\processed\dicom` (not over the ZIP files). Match each scan folder to its metadata by participant and acquisition date. Review the series and its DICOM metadata in IDA; text hints do not certify T1 weighting.
+4. Convert one reviewed scan series at a time with `scripts\convert_dicom_series.py`, or use a reviewed NIfTI scan. Fill `NIFTI_PATH` with the local NIfTI path in the new manifest and set `T1_CONFIRMED` to `yes` only after verification.
+5. Run `py -3.14 .\scripts\train_multimodal.py --manifest .\data\metadata\mri_training_manifest_from_xml.csv` to train the exploratory 3D CNN + clinical MLP prototype.
+
+### Generate report figures in MATLAB
+
+After the training command completes, it writes `reports/test_predictions.csv` (held-out labels, probabilities, and sex; no participant IDs) and `reports/training_history.csv`. In MATLAB, set the current folder to this project and run:
+
+```matlab
+run('matlab/generate_report_figures.m')
+```
+
+The script saves high-resolution PNGs and a captions text file in `reports/matlab_figures/`. Figures are based on the model's real held-out output. They are still exploratory single-holdout results, not validated clinical performance; interpret sex-specific plots cautiously when subgroup counts are small. The training-loss plot is not a validation-loss curve.
 
 The training script requires at least 20 eligible participants as a technical guard, but that is not an adequate sample-size guarantee. It canonicalizes orientation, normalizes intensity, and resizes volumes; skull stripping, registration, ROI extraction, cross-validation, Grad-CAM, and SHAP are not implemented yet. Do not treat prototype metrics as validated performance.
 

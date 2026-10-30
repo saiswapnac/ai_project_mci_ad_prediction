@@ -77,21 +77,23 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cohort", type=Path, default=COHORT_PATH, help="Local cohort CSV")
     parser.add_argument("--output", type=Path, default=OUT_PATH, help="Local candidate CSV output")
+    parser.add_argument("--mri", type=Path, default=MRI_PATH, help="IDA MRI metadata CSV (default: data/raw/MRI_metadata.csv)")
     args = parser.parse_args()
     cohort_path = local_path(args.cohort)
     output_path = local_path(args.output)
+    mri_path = local_path(args.mri)
 
     if not cohort_path.exists():
         print(f"Clinical cohort not found: {cohort_path}")
         print("Run scripts/build_cohort_from_tables.py first.")
         return 1
-    if not MRI_PATH.exists():
-        print(f"MRI metadata CSV not found: {MRI_PATH}")
-        print("Save the IDA image-search metadata export as data/raw/MRI_metadata.csv and rerun.")
+    if not mri_path.exists():
+        print(f"MRI metadata CSV not found: {mri_path}")
+        print("Convert the IDA XML metadata or save the IDA image-search export as a CSV, then rerun.")
         return 1
 
     cohort = normalize_headers(pd.read_csv(cohort_path, low_memory=False))
-    mri = normalize_headers(pd.read_csv(MRI_PATH, low_memory=False))
+    mri = normalize_headers(pd.read_csv(mri_path, low_memory=False))
     if not {"PTID", "BASELINE_DATE"}.issubset(cohort.columns):
         print("Clinical cohort needs PTID and BASELINE_DATE columns.")
         return 2
@@ -143,7 +145,7 @@ def main() -> int:
     linked["modality_is_mr"] = linked["_modality"].isin({"MR", "MRI"})
     # Text is only a review hint and does not certify T1 weighting.
     linked["description_t1_hint"] = linked["_description"].str.contains(
-        r"MPRAGE|IR\s*[-/]?\s*F?SPGR|T1W|T1.WEIGHT", case=False, regex=True, na=False
+        r"MP[- ]?RAGE|IR\s*[-/]?\s*F?SPGR|FSPGR|T1W|T1.WEIGHT", case=False, regex=True, na=False
     )
     candidates = linked[
         linked["modality_is_mr"] & linked["ACQ_DATE"].notna()
