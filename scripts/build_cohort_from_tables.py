@@ -59,13 +59,18 @@ def parse_dates(table: pd.DataFrame, column: str) -> pd.Series:
 
 
 def closest_baseline_value(base: pd.DataFrame, table: pd.DataFrame, date_col: str,
-                           value_cols: list[str], prefix: str, max_days: int = 120) -> pd.DataFrame:
-    """Attach the closest same-visit measure within 120 days of each diagnosis baseline."""
+                           value_cols: list[str], prefix: str, max_days: int = 180) -> pd.DataFrame:
+    """Attach the closest same-visit measure within max_days of each diagnosis baseline."""
     if date_col not in table.columns:
         raise ValueError(f"{prefix}: expected {date_col!r}; available: {table.columns.tolist()}")
     t = table.copy()
     t["_date"] = pd.to_datetime(t[date_col], errors="coerce")
     t = t.dropna(subset=["PTID", "_date"])
+    # Require at least one non-null measurement in value_cols if value_cols are present
+    valid_cols = [c for c in value_cols if c in t.columns]
+    if valid_cols:
+        has_val = t[valid_cols].notna().any(axis=1)
+        t = t[has_val].copy()
     if "VISCODE2" in t.columns:
         t["_visit_key"] = t["VISCODE2"].astype("string").str.strip().str.lower()
     elif "VISCODE" in t.columns:
@@ -79,12 +84,16 @@ def closest_baseline_value(base: pd.DataFrame, table: pd.DataFrame, date_col: st
         options["_delta_days"] = (options["_date"] - target_date).dt.days.abs()
         if visit_key:
             # Prefer an exact visit-code match only when it is also within the date window.
-            # Otherwise use the closest same-participant dated record, since phase-specific
-            # ADNI visit codes can differ across source tables.
             same_visit = options[options["_visit_key"].eq(visit_key) & (options["_delta_days"] <= max_days)]
             if not same_visit.empty:
                 options = same_visit
         options = options[options["_delta_days"] <= max_days].sort_values("_delta_days")
+        if options.empty:
+            # For fixed demographics, fallback to any available visit for that participant if within a wider window
+            fallback = t[t["PTID"].eq(pid)].copy()
+            if prefix.upper() == "DEMO" and not fallback.empty:
+                fallback["_delta_days"] = (fallback["_date"] - target_date).dt.days.abs()
+                options = fallback.sort_values("_delta_days")
         if options.empty:
             selections.append({"PTID": pid})
             continue
@@ -189,7 +198,9 @@ def main() -> None:
     if "demo_pteducat" in cohort.columns:
         cohort["education_years"] = pd.to_numeric(cohort["demo_pteducat"], errors="coerce").replace([-1, -4], np.nan)
     if "demo_ptdobyy" in cohort.columns:
-        birth_year = pd.to_numeric(cohort["demo_ptdobyy"], errors="coerce")
+        dob_str = cohort["demo_ptdobyy"].astype("string").str.strip()
+        birth_year = pd.to_datetime(dob_str, errors="coerce").dt.year
+        birth_year = birth_year.fillna(pd.to_numeric(dob_str.str.extract(r"(\d{4})")[0], errors="coerce"))
         cohort["age_years_approx"] = cohort["baseline_date"].dt.year - birth_year
         cohort.loc[~cohort["age_years_approx"].between(40, 110), "age_years_approx"] = np.nan
     cohort["mmse_score"] = pd.to_numeric(cohort.get("mmse_mmscore"), errors="coerce").replace([-1, -4], np.nan)
